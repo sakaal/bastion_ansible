@@ -1,0 +1,67 @@
+---
+# file: roles/admin_access_sources/tasks/main.yml
+
+#
+# Restricts administrative access based on connection source address.
+#
+# The firewall may have to be reconfigured while direct administrative access
+# to the bastion host has been lost.  Therefore the bastion must independently
+# poll the configuration repository and reconfigure itself when changes are
+# detected.
+#
+
+- name: Check the current configuration revision
+  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
+  register: previous
+  changed_when: False
+
+#
+# This method of fetching the configuration overwrites any local changes and
+# also removes any local files not present in the remote origin master branch.
+#
+- name: Receive the latest configuration
+  shell: chdir="{{ inventory_dir }}"
+         git fetch --quiet --all && git reset --hard origin/master
+  changed_when: False
+
+- name: Check if the configuration revision changed
+  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
+  register: configuration
+  changed_when: configuration.stdout.strip() != previous.stdout.strip()
+
+- name: Check the currently authorized source addresses
+  sudo: yes
+  command: firewall-cmd --permanent
+           --zone={{ firewall_zone | mandatory }}
+           --list-sources
+  register: firewall_result
+  changed_when: False
+
+- name: Determine missing source addresses
+  set_fact: missing_sources={{ admin_access_sources | difference(firewall_result.stdout.split()) }}
+
+- name: Determine unwanted source addresses
+  set_fact: unwanted_sources="{{ firewall_result.stdout.split() | difference(admin_access_sources) }}"
+
+- name: Allow administrative access from authorized source addresses
+  with_items: missing_sources
+  sudo: yes
+  command: firewall-cmd --permanent
+           --zone={{ firewall_zone | mandatory }}
+           --add-source={{ item }}
+  register: sources_added
+  changed_when: True
+
+- name: Remove administrative access from unauthorized source addresses
+  with_items: unwanted_sources
+  sudo: yes
+  command: firewall-cmd --permanent
+           --zone={{ firewall_zone | mandatory }}
+           --remove-source={{ item }}
+  register: sources_removed
+  changed_when: True
+
+- name: Reload the firewall configuration
+  when: sources_added|changed or sources_removed|changed
+  sudo: yes
+  command: firewall-cmd --reload

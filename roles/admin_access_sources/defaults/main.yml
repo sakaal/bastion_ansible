@@ -1,0 +1,7 @@
+---
+# file: roles/admin_access_sources/defaults/main.yml
+
+#
+# FirewallD zone for administrative access
+#
+firewall_zone: admin
