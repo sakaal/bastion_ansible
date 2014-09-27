@@ -1,7 +1,14 @@
 ---
 # file: bastion.yml
 
-- hosts: localhost
+- name: CMDB UPDATE
+  hosts: localhost
+  connection: local
+  roles:
+  - inventory_update
+
+- name: FIREWALL
+  hosts: localhost
   connection: local
   roles:
   - admin_access_sources

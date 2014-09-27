@@ -10,25 +10,6 @@
 # detected.
 #
 
-- name: Check the current configuration revision
-  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
-  register: previous
-  changed_when: False
-
-#
-# This method of fetching the configuration overwrites any local changes and
-# also removes any local files not present in the remote origin master branch.
-#
-- name: Receive the latest configuration
-  shell: chdir="{{ inventory_dir }}"
-         git fetch --quiet --all && git reset --hard origin/master
-  changed_when: False
-
-- name: Check if the configuration revision changed
-  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
-  register: configuration
-  changed_when: configuration.stdout.strip() != previous.stdout.strip()
-
 - name: Check the currently authorized source addresses
   sudo: yes
   command: firewall-cmd --permanent
