@@ -19,3 +19,17 @@
   command: chdir="{{ inventory_dir }}" git rev-parse HEAD
   register: configuration
   changed_when: configuration.stdout.strip() != previous.stdout.strip()
+
+- name: Verify the configuration revision GnuPG signature
+  shell: chdir="{{ inventory_dir }}"
+         git show {{ configuration.stdout.strip() }}
+         --name-only --format="%G?%n%GG" | sed '/^$/d'
+  register: gpg_result
+  changed_when: gpg_result.stdout_lines[0] == 'G' # Good signature
+  failed_when: gpg_result.stdout_lines[0] != 'G'
+
+- name: Reject signatures by untrusted GnuPG keys
+  with_items: gpg_result.stdout_lines
+  when: 'item|match("^gpg: WARNING")'
+  local_action: command echo "{{ item }}"
+  failed_when: True
