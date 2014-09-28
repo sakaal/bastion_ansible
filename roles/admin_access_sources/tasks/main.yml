@@ -18,11 +18,9 @@
   register: firewall_result
   changed_when: False
 
-- name: Determine missing source addresses
-  set_fact: missing_sources={{ admin_access_sources | difference(firewall_result.stdout.split()) }}
-
-- name: Determine unwanted source addresses
-  set_fact: unwanted_sources="{{ firewall_result.stdout.split() | difference(admin_access_sources) }}"
+- set_fact:
+    missing_sources: "{{ admin_access_sources | difference(firewall_result.stdout.split()) }}"
+    unwanted_sources: "{{ firewall_result.stdout.split() | difference(admin_access_sources) }}"
 
 - name: Allow administrative access from authorized source addresses
   with_items: missing_sources
