@@ -33,7 +33,7 @@
   changed_when: False
 
 - name: Generate firewall rules for the administrative SSH port
-  when: not sshd_port|skipped
+  when:  ({{ admin_access_sources }} is defined) not sshd_port|skipped
   with_items: admin_access_sources
   shell: echo
          'rule family="ipv4" source address="{{ item }}"
@@ -42,7 +42,8 @@
   changed_when: False
 
 - name: Generate firewall rules for services
-  when: firewall_services is defined
+  when: ({{ admin_access_sources }} is defined) and
+        ({{ firewall_services }} is defined)
   with_nested:
   - admin_access_sources
   - firewall_services
