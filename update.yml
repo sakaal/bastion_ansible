@@ -1,0 +1,12 @@
+---
+# file: update.yml
+
+#
+# Updates the configuration and verifies its GPG signature.
+#
+
+- name: CMDB UPDATE
+  hosts: localhost
+  connection: local
+  roles:
+  - inventory_update

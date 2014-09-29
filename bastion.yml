@@ -1,16 +1,14 @@
 ---
 # file: bastion.yml
 
+#
+# Applies the bastion configuration.
+#
+
 - name: LOCAL INVENTORY
   hosts: localhost
   tasks:
   - add_host: name="{{ ansible_fqdn }}" groups=bastion
-
-- name: CMDB UPDATE
-  hosts: bastion
-  connection: local
-  roles:
-  - inventory_update
 
 - name: FIREWALL
   hosts: bastion

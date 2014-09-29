@@ -10,37 +10,88 @@
 # detected.
 #
 
-- name: Check the currently authorized source addresses
+- name: Determine the SSH port
+  sudo: yes
+  command: sed -ne 's/^\s*Port\s\+\([0-9]\+\)/\1/p' /etc/ssh/sshd_config
+  register: sshd_port
+  changed_when: False
+
+- name: Determine the firewall default zone
+  sudo: yes
+  command: firewall-cmd --get-default-zone
+  register: default_zone
+  changed_when: False
+
+- name: Create a temporary file
+  command: mktemp
+  register: temp_file
+  changed_when: False
+
+- name: Generate firewalld rules for the SSH port only in the default zone
+  when: firewall_zone == default_zone.stdout.strip()
+  with_items: admin_access_sources
+  shell: echo
+         'rule family="ipv4" source address="{{ item }}"
+         port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
+         accept' >> {{ temp_file.stdout }}
+  changed_when: False
+
+- name: Generate firewalld rules for services
+  when: firewall_services is defined
+  with_nested:
+  - admin_access_sources
+  - firewall_services
+  shell: command echo
+         'rule family="ipv4" source address="{{ item[0] }}"
+         service name="{{ item[1] }}" accept' >> {{ temp_file.stdout }}
+  changed_when: False
+
+- name: Read the temporary file
+  command: cat {{ temp_file.stdout }}
+  register: firewall_rules
+  changed_when: False
+
+- name: Delete the temporary file
+  file: name="{{ temp_file.stdout }}" state=absent
+  changed_when: False
+
+- set_fact:
+    firewall_rules: "{{ firewall_rules.stdout_lines }}"
+  changed_when: False
+
+- name: Check the currently active firewall rules
   sudo: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
-           --list-sources
+           --list-rich-rules
   register: firewall_result
   changed_when: False
 
 - set_fact:
-    missing_sources: "{{ admin_access_sources | difference(firewall_result.stdout.split()) }}"
-    unwanted_sources: "{{ firewall_result.stdout.split() | difference(admin_access_sources) }}"
+    missing_rules: "{{ firewall_rules | difference(firewall_result.stdout_lines) }}"
+    unwanted_rules: "{{ firewall_result.stdout_lines | difference(firewall_rules) }}"
+  changed_when: False
 
-- name: Allow administrative access from authorized source addresses
-  with_items: missing_sources
+- name: Add authorized firewall rules
+  with_items: missing_rules
   sudo: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
-           --add-source={{ item }}
-  register: sources_added
+           --add-rich-rule='{{ item }}'
+  register: rules_added
   changed_when: True
 
-- name: Remove administrative access from unauthorized source addresses
-  with_items: unwanted_sources
+- name: Remove unauthorized firewall rules
+  with_items: unwanted_rules
   sudo: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
-           --remove-source={{ item }}
-  register: sources_removed
+           --remove-rich-rule='{{ item }}'
+  register: rules_removed
   changed_when: True
 
 - name: Reload the firewall configuration
-  when: sources_added|changed or sources_removed|changed
+  when: rules_added|changed or rules_removed|changed
   sudo: yes
   command: firewall-cmd --reload
+  changed_when: True
