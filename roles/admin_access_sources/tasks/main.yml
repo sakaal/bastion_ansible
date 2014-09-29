@@ -10,25 +10,30 @@
 # detected.
 #
 
-- name: Determine the SSH port
-  sudo: yes
-  command: sed -ne 's/^\s*Port\s\+\([0-9]\+\)/\1/p' /etc/ssh/sshd_config
-  register: sshd_port
-  changed_when: False
-
 - name: Determine the firewall default zone
   sudo: yes
   command: firewall-cmd --get-default-zone
   register: default_zone
   changed_when: False
 
-- name: Create a temporary file
+#
+# Manage administrative SSH port access only when
+# targeting the default administrative firewall zone.
+#
+- name: Manage administrative SSH port access
+  when: firewall_zone == default_zone.stdout.strip()
+  sudo: yes
+  command: sed -ne 's/^\s*Port\s\+\([0-9]\+\)/\1/p' /etc/ssh/sshd_config
+  register: sshd_port
+  changed_when: False
+
+- name: Create a temporary file for firewall rules
   command: mktemp
   register: temp_file
   changed_when: False
 
-- name: Generate firewalld rules for the SSH port only in the default zone
-  when: firewall_zone == default_zone.stdout.strip()
+- name: Generate firewall rules for the administrative SSH port
+  when: not sshd_port|skipped
   with_items: admin_access_sources
   shell: echo
          'rule family="ipv4" source address="{{ item }}"
@@ -36,7 +41,7 @@
          accept' >> {{ temp_file.stdout }}
   changed_when: False
 
-- name: Generate firewalld rules for services
+- name: Generate firewall rules for services
   when: firewall_services is defined
   with_nested:
   - admin_access_sources
@@ -46,7 +51,7 @@
          service name="{{ item[1] }}" accept' >> {{ temp_file.stdout }}
   changed_when: False
 
-- name: Read the temporary file
+- name: Read the firewall rules from the temporary file
   command: cat {{ temp_file.stdout }}
   register: firewall_rules
   changed_when: False
@@ -89,6 +94,28 @@
            --remove-rich-rule='{{ item }}'
   register: rules_removed
   changed_when: True
+
+- name: Check firewall rules for the administrative SSH port
+  when: not sshd_port|skipped
+  sudo: yes
+  shell: firewall-cmd --permanent
+         --zone={{ firewall_zone | mandatory }}
+         --list-rich-rules | grep 'port="{{ sshd_port.stdout }}"'
+  register: firewall_result
+  changed_when: firewall_result.rc != 0 or firewall_result.stdout.strip() == ""
+  failed_when: False
+
+- name: Open the administrative SSH port when no stricter rules apply
+  when: (not sshd_port|skipped) and (firewall_result|changed)
+  sudo: yes
+  command: firewall-cmd --permanent --zone={{ firewall_zone }}
+           --add-port="{{ sshd_port.stdout.strip() }}/tcp"
+
+- name: Restrict administrative SSH port access
+  when: (not sshd_port|skipped) and (not firewall_result|changed)
+  sudo: yes
+  command: firewall-cmd --permanent --zone={{ firewall_zone }}
+           --remove-port="{{ sshd_port.stdout.strip() }}/tcp"
 
 - name: Reload the firewall configuration
   when: rules_added|changed or rules_removed|changed
