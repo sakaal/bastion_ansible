@@ -42,7 +42,6 @@
     log_limit: "5/m"
 
 - name: A firewall rule to reject and log SSH port 22 connection attempts
-  when: not sshd_port|skipped
   shell: echo
          'rule port port="22" protocol="tcp"
          log prefix="REJECT " level="notice" limit value="{{ log_limit }}"
