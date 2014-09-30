@@ -32,13 +32,31 @@
   register: temp_file
   changed_when: False
 
+#
+# Record a systemd kernel module journal entry
+# and a NETFILTER_PKT entry in the audit log.
+#
+
+- set_fact:
+    temp_file: "{{ temp_file.stdout | mandatory }}"
+    log_limit: "5/m"
+
+- name: A firewall rule to reject and log SSH port 22 connection attempts
+  when: not sshd_port|skipped
+  shell: echo
+         'rule port port="22" protocol="tcp"
+         log prefix="REJECT " level="notice" limit value="{{ log_limit }}"
+         audit limit value="{{ log_limit | mandatory }}"
+         reject' >> {{ temp_file }}
+  changed_when: False
+
 - name: Generate firewall rules for the administrative SSH port
   when: (admin_access_sources|default(False)) and not sshd_port|skipped
   with_items: admin_access_sources
   shell: echo
          'rule family="ipv4" source address="{{ item }}"
          port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
-         accept' >> {{ temp_file.stdout }}
+         accept' >> {{ temp_file }}
   changed_when: False
 
 - name: Generate firewall rules for services
@@ -49,16 +67,16 @@
   - firewall_services
   shell: command echo
          'rule family="ipv4" source address="{{ item[0] }}"
-         service name="{{ item[1] }}" accept' >> {{ temp_file.stdout }}
+         service name="{{ item[1] }}" accept' >> {{ temp_file }}
   changed_when: False
 
 - name: Read the firewall rules from the temporary file
-  command: cat {{ temp_file.stdout }}
+  command: cat {{ temp_file }}
   register: firewall_rules
   changed_when: False
 
 - name: Delete the temporary file
-  file: name="{{ temp_file.stdout }}" state=absent
+  file: name="{{ temp_file }}" state=absent
   changed_when: False
 
 - set_fact:
