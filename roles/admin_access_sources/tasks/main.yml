@@ -64,7 +64,7 @@
   with_nested:
   - admin_access_sources
   - firewall_services
-  shell: command echo
+  shell: echo
          'rule family="ipv4" source address="{{ item[0] }}"
          service name="{{ item[1] }}" accept' >> {{ temp_file }}
   changed_when: False
