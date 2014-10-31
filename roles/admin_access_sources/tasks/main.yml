@@ -10,6 +10,10 @@
 # detected.
 #
 
+- name: Ensure that the firewall is up
+  sudo: yes
+  service: name=firewalld state=started enabled=yes
+
 - name: Determine the firewall default zone
   sudo: yes
   command: firewall-cmd
