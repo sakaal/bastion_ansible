@@ -54,7 +54,7 @@
          reject' >> {{ temp_file }}
   changed_when: False
 
-- name: Generate firewall rules for the administrative SSH port
+- name: Generate IPv4 firewall rules for the administrative SSH port
   when: (admin_access_sources|default(False)) and not sshd_port|skipped
   with_items: admin_access_sources
   shell: echo
@@ -63,7 +63,16 @@
          accept' >> {{ temp_file }}
   changed_when: False
 
-- name: Generate firewall rules for services
+- name: Generate IPv6 firewall rules for the administrative SSH port
+  when: (admin_access_sources_ipv6|default(False)) and not sshd_port|skipped
+  with_items: admin_access_sources_ipv6
+  shell: echo
+         'rule family="ipv6" source address="{{ item }}"
+         port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
+         accept' >> {{ temp_file }}
+  changed_when: False
+
+- name: Generate IPv4 firewall rules for services
   when: (admin_access_sources|default(False)) and
         (firewall_services|default(False))
   with_nested:
@@ -71,6 +80,17 @@
   - firewall_services
   shell: echo
          'rule family="ipv4" source address="{{ item[0] }}"
+         service name="{{ item[1] }}" accept' >> {{ temp_file }}
+  changed_when: False
+
+- name: Generate IPv6 firewall rules for services
+  when: (admin_access_sources_ipv6|default(False)) and
+        (firewall_services|default(False))
+  with_nested:
+  - admin_access_sources_ipv6
+  - firewall_services
+  shell: echo
+         'rule family="ipv6" source address="{{ item[0] }}"
          service name="{{ item[1] }}" accept' >> {{ temp_file }}
   changed_when: False
 
