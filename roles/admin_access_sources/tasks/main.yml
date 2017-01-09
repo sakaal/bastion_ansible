@@ -1,6 +1,4 @@
----
 # file: roles/admin_access_sources/tasks/main.yml
-
 #
 # Restricts administrative access based on connection source address.
 #
@@ -9,13 +7,14 @@
 # poll the configuration repository and reconfigure itself when changes are
 # detected.
 #
+---
 
 - name: Ensure that the firewall is up
-  sudo: yes
+  become: yes
   service: name=firewalld state=started enabled=yes
 
 - name: Determine the firewall default zone
-  sudo: yes
+  become: yes
   command: firewall-cmd
            --get-zone-of-interface="{{ ansible_default_ipv4.interface }}"
   register: default_interface_zone
@@ -27,7 +26,7 @@
 #
 - name: Manage administrative SSH port access
   when: firewall_zone == default_interface_zone.stdout.strip()
-  sudo: yes
+  become: yes
   command: sed -ne 's/^\s*Port\s\+\([0-9]\+\)/\1/p' /etc/ssh/sshd_config
   register: sshd_port
   changed_when: False
@@ -56,7 +55,7 @@
 
 - name: Generate IPv4 firewall rules for the administrative SSH port
   when: (admin_access_sources|default(False)) and not sshd_port|skipped
-  with_items: admin_access_sources
+  with_items: "{{ admin_access_sources }}"
   shell: echo
          'rule family="ipv4" source address="{{ item }}"
          port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
@@ -65,7 +64,7 @@
 
 - name: Generate IPv6 firewall rules for the administrative SSH port
   when: (admin_access_sources_ipv6|default(False)) and not sshd_port|skipped
-  with_items: admin_access_sources_ipv6
+  with_items: "{{ admin_access_sources_ipv6 }}"
   shell: echo
          'rule family="ipv6" source address="{{ item }}"
          port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
@@ -76,8 +75,8 @@
   when: (admin_access_sources|default(False)) and
         (firewall_services|default(False))
   with_nested:
-  - admin_access_sources
-  - firewall_services
+  - "{{ admin_access_sources }}"
+  - "{{ firewall_services }}"
   shell: echo
          'rule family="ipv4" source address="{{ item[0] }}"
          service name="{{ item[1] }}" accept' >> {{ temp_file }}
@@ -87,8 +86,8 @@
   when: (admin_access_sources_ipv6|default(False)) and
         (firewall_services|default(False))
   with_nested:
-  - admin_access_sources_ipv6
-  - firewall_services
+  - "{{ admin_access_sources_ipv6 }}"
+  - "{{ firewall_services }}"
   shell: echo
          'rule family="ipv6" source address="{{ item[0] }}"
          service name="{{ item[1] }}" accept' >> {{ temp_file }}
@@ -108,7 +107,7 @@
   changed_when: False
 
 - name: Check the currently active firewall rules
-  sudo: yes
+  become: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
            --list-rich-rules
@@ -121,8 +120,8 @@
   changed_when: False
 
 - name: Add authorized firewall rules
-  with_items: missing_rules
-  sudo: yes
+  with_items: "{{ missing_rules }}"
+  become: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
            --add-rich-rule='{{ item }}'
@@ -130,8 +129,8 @@
   changed_when: True
 
 - name: Remove unauthorized firewall rules
-  with_items: unwanted_rules
-  sudo: yes
+  with_items: "{{ unwanted_rules }}"
+  become: yes
   command: firewall-cmd --permanent
            --zone={{ firewall_zone | mandatory }}
            --remove-rich-rule='{{ item }}'
@@ -140,7 +139,7 @@
 
 - name: Check firewall rules for the administrative SSH port
   when: not sshd_port|skipped
-  sudo: yes
+  become: yes
   shell: firewall-cmd --permanent
          --zone={{ firewall_zone | mandatory }}
          --list-rich-rules | grep 'port="{{ sshd_port.stdout }}"'
@@ -150,18 +149,18 @@
 
 - name: Open the administrative SSH port when no stricter rules apply
   when: (not sshd_port|skipped) and (firewall_result|changed)
-  sudo: yes
+  become: yes
   command: firewall-cmd --permanent --zone={{ firewall_zone }}
            --add-port="{{ sshd_port.stdout.strip() }}/tcp"
 
 - name: Restrict administrative SSH port access
   when: (not sshd_port|skipped) and (not firewall_result|changed)
-  sudo: yes
+  become: yes
   command: firewall-cmd --permanent --zone={{ firewall_zone }}
            --remove-port="{{ sshd_port.stdout.strip() }}/tcp"
 
 - name: Reload the firewall configuration
   when: rules_added|changed or rules_removed|changed
-  sudo: yes
+  become: yes
   command: firewall-cmd --reload
   changed_when: True

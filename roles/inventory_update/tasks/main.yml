@@ -1,5 +1,5 @@
----
 # file: roles/inventory_update/tasks/main.yml
+---
 
 - name: Check the current configuration revision
   command: chdir="{{ inventory_dir }}" git rev-parse HEAD
@@ -29,7 +29,7 @@
   failed_when: gpg_result.stdout_lines[0] != 'G'
 
 - name: Reject signatures by untrusted GnuPG keys
-  with_items: gpg_result.stdout_lines
+  with_items: "{{ gpg_result.stdout_lines }}"
   when: 'item|match("^gpg: WARNING")'
   local_action: command echo "{{ item }}"
   failed_when: True
