@@ -1,12 +1,12 @@
----
 # file: bastion.yml
-
 #
 # Applies the bastion configuration.
 #
+---
 
 - name: LOCAL INVENTORY
   hosts: localhost
+  connection: local
   tasks:
   - add_host: name="{{ ansible_fqdn }}" groups=bastion
 
