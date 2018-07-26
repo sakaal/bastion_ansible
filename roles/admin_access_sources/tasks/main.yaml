@@ -1,4 +1,4 @@
-# file: roles/admin_access_sources/tasks/main.yml
+# file: roles/admin_access_sources/tasks/main.yaml
 #
 # Restricts administrative access based on connection source address.
 #
@@ -11,7 +11,10 @@
 
 - name: Ensure that the firewall is up
   become: yes
-  service: name=firewalld state=started enabled=yes
+  service:
+    name: firewalld
+    state: started
+    enabled: yes
 
 - name: Determine the firewall default zone
   become: yes
@@ -42,32 +45,32 @@
 #
 
 - set_fact:
-    temp_file: "{{ temp_file.stdout | mandatory }}"
+    temp_file: "{{ temp_file.stdout }}"
     log_limit: "5/m"
 
 - name: A firewall rule to reject and log SSH port 22 connection attempts
   shell: echo
          'rule port port="22" protocol="tcp"
          log prefix="REJECT " level="notice" limit value="{{ log_limit }}"
-         audit limit value="{{ log_limit | mandatory }}"
+         audit limit value="{{ log_limit }}"
          reject' >> {{ temp_file }}
   changed_when: False
 
 - name: Generate IPv4 firewall rules for the administrative SSH port
-  when: (admin_access_sources|default(False)) and not sshd_port|skipped
+  when: (admin_access_sources|default(False)) and not sshd_port is skipped
   with_items: "{{ admin_access_sources }}"
   shell: echo
          'rule family="ipv4" source address="{{ item }}"
-         port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
+         port port="{{ sshd_port.stdout.strip() }}" protocol="tcp"
          accept' >> {{ temp_file }}
   changed_when: False
 
 - name: Generate IPv6 firewall rules for the administrative SSH port
-  when: (admin_access_sources_ipv6|default(False)) and not sshd_port|skipped
+  when: (admin_access_sources_ipv6|default(False)) and not sshd_port is skipped
   with_items: "{{ admin_access_sources_ipv6 }}"
   shell: echo
          'rule family="ipv6" source address="{{ item }}"
-         port port="{{ sshd_port.stdout.strip() | mandatory }}" protocol="tcp"
+         port port="{{ sshd_port.stdout.strip() }}" protocol="tcp"
          accept' >> {{ temp_file }}
   changed_when: False
 
@@ -99,7 +102,9 @@
   changed_when: False
 
 - name: Delete the temporary file
-  file: name="{{ temp_file }}" state=absent
+  file:
+    name: "{{ temp_file }}"
+    state: absent
   changed_when: False
 
 - set_fact:
@@ -109,7 +114,7 @@
 - name: Check the currently active firewall rules
   become: yes
   command: firewall-cmd --permanent
-           --zone={{ firewall_zone | mandatory }}
+           --zone={{ firewall_zone }}
            --list-rich-rules
   register: firewall_result
   changed_when: False
@@ -123,7 +128,7 @@
   with_items: "{{ missing_rules }}"
   become: yes
   command: firewall-cmd --permanent
-           --zone={{ firewall_zone | mandatory }}
+           --zone={{ firewall_zone }}
            --add-rich-rule='{{ item }}'
   register: rules_added
   changed_when: True
@@ -132,35 +137,35 @@
   with_items: "{{ unwanted_rules }}"
   become: yes
   command: firewall-cmd --permanent
-           --zone={{ firewall_zone | mandatory }}
+           --zone={{ firewall_zone }}
            --remove-rich-rule='{{ item }}'
   register: rules_removed
   changed_when: True
 
 - name: Check firewall rules for the administrative SSH port
-  when: not sshd_port|skipped
+  when: not sshd_port is skipped
   become: yes
   shell: firewall-cmd --permanent
-         --zone={{ firewall_zone | mandatory }}
+         --zone={{ firewall_zone }}
          --list-rich-rules | grep 'port="{{ sshd_port.stdout }}"'
   register: firewall_result
   changed_when: firewall_result.rc != 0 or firewall_result.stdout.strip() == ""
   failed_when: False
 
 - name: Open the administrative SSH port when no stricter rules apply
-  when: (not sshd_port|skipped) and (firewall_result|changed)
+  when: (not sshd_port is skipped) and (firewall_result is changed)
   become: yes
   command: firewall-cmd --permanent --zone={{ firewall_zone }}
            --add-port="{{ sshd_port.stdout.strip() }}/tcp"
 
 - name: Restrict administrative SSH port access
-  when: (not sshd_port|skipped) and (not firewall_result|changed)
+  when: (not sshd_port is skipped) and (not firewall_result is changed)
   become: yes
   command: firewall-cmd --permanent --zone={{ firewall_zone }}
            --remove-port="{{ sshd_port.stdout.strip() }}/tcp"
 
 - name: Reload the firewall configuration
-  when: rules_added|changed or rules_removed|changed
+  when: rules_added is changed or rules_removed is changed
   become: yes
   command: firewall-cmd --reload
   changed_when: True

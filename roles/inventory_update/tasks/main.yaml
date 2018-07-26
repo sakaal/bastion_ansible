@@ -1,8 +1,10 @@
-# file: roles/inventory_update/tasks/main.yml
+# file: roles/inventory_update/tasks/main.yaml
 ---
 
 - name: Check the current configuration revision
-  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
+  command:
+    chdir: "{{ inventory_dir }}"
+    _raw_params: git rev-parse HEAD
   register: previous
   changed_when: False
 
@@ -11,25 +13,30 @@
 # also removes any local files not present in the remote origin master branch.
 #
 - name: Receive the latest configuration
-  shell: chdir="{{ inventory_dir }}"
-         git fetch --quiet --all && git reset --hard origin/master
+  shell:
+    chdir: "{{ inventory_dir }}"
+    _raw_params: git fetch --quiet --all && git reset --hard origin/master
   changed_when: False
 
 - name: Check if the configuration revision changed
-  command: chdir="{{ inventory_dir }}" git rev-parse HEAD
+  command:
+    chdir: "{{ inventory_dir }}"
+    _raw_params: git rev-parse HEAD
   register: configuration
   changed_when: configuration.stdout.strip() != previous.stdout.strip()
 
 - name: Verify the configuration revision GnuPG signature
-  shell: chdir="{{ inventory_dir }}"
-         git show {{ configuration.stdout.strip() }}
-         --name-only --format="%G?%n%GG" | sed '/^$/d'
+  shell:
+    chdir: "{{ inventory_dir }}"
+    _raw_params: >-
+        git show {{ configuration.stdout.strip() }}
+        --name-only --format="%G?%n%GG" | sed '/^$/d'
   register: gpg_result
   changed_when: gpg_result.stdout_lines[0] == 'G' # Good signature
   failed_when: gpg_result.stdout_lines[0] != 'G'
 
 - name: Reject signatures by untrusted GnuPG keys
   with_items: "{{ gpg_result.stdout_lines }}"
-  when: 'item|match("^gpg: WARNING")'
+  when: item is match( '^gpg' + ':' + 'WARNING' )
   local_action: command echo "{{ item }}"
   failed_when: True

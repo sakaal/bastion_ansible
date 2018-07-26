@@ -1,4 +1,4 @@
-# file: bastion.yml
+# file: bastion.yaml
 #
 # Applies the bastion configuration.
 #
@@ -8,7 +8,9 @@
   hosts: localhost
   connection: local
   tasks:
-  - add_host: name="{{ ansible_fqdn }}" groups=bastion
+  - add_host:
+      name: "{{ ansible_fqdn }}"
+      groups: bastion
 
 - name: FIREWALL
   hosts: bastion

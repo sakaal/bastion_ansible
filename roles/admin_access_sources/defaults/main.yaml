@@ -1,4 +1,4 @@
-# file: roles/admin_access_sources/defaults/main.yml
+# file: roles/admin_access_sources/defaults/main.yaml
 ---
 
 #
