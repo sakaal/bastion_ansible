@@ -12,8 +12,10 @@
       name: "{{ ansible_fqdn }}"
       groups: bastion
 
-- name: FIREWALL
-  hosts: bastion
-  connection: local
-  roles:
-  - admin_access_sources
+# Disabled the bastion firewall auto-configuration to simplify management.
+#
+#- name: FIREWALL
+#  hosts: bastion
+#  connection: local
+#  roles:
+#  - admin_access_sources
